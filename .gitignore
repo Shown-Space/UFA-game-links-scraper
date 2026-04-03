@@ -1,0 +1,20 @@
+# Environment / secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Generated outputs
+*.xlsx
+*.sql
+sitemap.xml
+ufa_youtube_progress.json
+
+# OS stuff
+.DS_Store
+Thumbs.db

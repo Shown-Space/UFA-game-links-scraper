@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe ufa_watchufa_linker.py)",
+      "Bash(.venv/Scripts/python.exe -c ':*)",
+      "Bash(.venv/Scripts/python.exe generate_game_links_sql.py)",
+      "Bash(.venv/Scripts/python.exe ufa_weekly_sync.py)"
+    ]
+  }
+}
