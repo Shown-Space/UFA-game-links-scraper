@@ -4,7 +4,7 @@ Finds YouTube highlight links and WatchUFA stream links for UFA games and writes
 
 ## Automated setup (GitHub Actions)
 
-The script runs automatically every Saturday, Sunday, and Monday at 12pm ET via GitHub Actions — no manual runs needed.
+The script runs automatically every Saturday, Sunday, Monday, and Tuesday at 12pm ET via GitHub Actions — no manual runs needed.
 
 **One-time setup:**
 
