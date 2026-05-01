@@ -5,7 +5,8 @@
       "Bash(.venv/Scripts/python.exe -c ':*)",
       "Bash(.venv/Scripts/python.exe generate_game_links_sql.py)",
       "Bash(.venv/Scripts/python.exe ufa_weekly_sync.py)",
-      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hanso\\\\OneDrive\\\\Documents\\\\Coding Projects\\\\UFA-youtube-scraper\" | Where-Object { $_.Name -ne \".venv\" } | Select-Object Name, LastWriteTime)"
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\hanso\\\\OneDrive\\\\Documents\\\\Coding Projects\\\\UFA-youtube-scraper\" | Where-Object { $_.Name -ne \".venv\" } | Select-Object Name, LastWriteTime)",
+      "PowerShell(New-Item *)"
     ]
   }
 }
