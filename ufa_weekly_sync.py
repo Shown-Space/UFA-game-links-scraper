@@ -36,7 +36,7 @@ YOUTUBE_API_KEY = os.environ["YOUTUBE_API_KEY"]
 SUPABASE_URL    = os.environ["SUPABASE_URL"]
 SUPABASE_KEY    = os.environ["SUPABASE_KEY"]
 
-YEAR_FILTER        = 2025
+YEAR_FILTER        = 2026
 SITEMAP_URL        = "https://www.watchufa.tv/sitemap.xml"
 UFA_CHANNEL_ID     = "UCzInURHrtSH7208Mf1HVqUA"
 SEARCH_DELAY       = 1.0  # seconds between YouTube API calls
@@ -164,7 +164,7 @@ def upsert_game_link(game_id, yt_url=None, watchufa_url=None):
 
 # ─── WATCHUFA SITEMAP ─────────────────────────────────────────────────────────
 
-_DATE_SUFFIX        = r"-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}-\d{2}$"
+_DATE_SUFFIX        = r"(?:-.+)?$"   # tolerates -remaster, timestamps, or nothing
 _TEAMS              = r"^(?P<away>[a-z][a-z-]*)-at-(?P<home>[a-z][a-z-]*)"
 _GAME_SLUG_RE       = re.compile(_TEAMS + r"-(?P<month>\d{1,2})-(?P<day>\d{1,2})-(?P<year>\d{4})" + _DATE_SUFFIX)
 _GAME_SLUG_RE_ALT   = re.compile(_TEAMS + r"-(?P<month>\d{1,2})-\d{1,2}-(?P<day>\d{1,2})-(?P<year>\d{4})" + _DATE_SUFFIX)
@@ -177,20 +177,32 @@ def fetch_sitemap():
         return r.read()
 
 
+def _watchufa_url_priority(url):
+    is_week     = bool(re.search(r"/week-\d+/", url))
+    is_remaster = "remaster" in url
+    if is_week and is_remaster: return 0
+    if is_week:                 return 1
+    if is_remaster:             return 2
+    return 3
+
+
 def parse_sitemap(xml_bytes):
     """Returns {(away_id, home_id, game_date): url} for all YEAR_FILTER games."""
     root = ElementTree.fromstring(xml_bytes)
-    seen = set()
-    lookup = {}
+    seen_urls = set()
+    lookup          = {}
+    lookup_priority = {}
 
     for loc_el in root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc"):
         url = loc_el.text.strip()
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
         m = re.search(r"/videos/(.+)$", url)
         if not m:
             continue
         slug = m.group(1)
-        if slug in seen:
-            continue
 
         match = _GAME_SLUG_RE.match(slug) or _GAME_SLUG_RE_ALT.match(slug)
         if not match:
@@ -203,9 +215,12 @@ def parse_sitemap(xml_bytes):
         if not away_id or not home_id:
             continue
 
-        seen.add(slug)
         game_date = date(int(match.group("year")), int(match.group("month")), int(match.group("day")))
-        lookup[(away_id, home_id, game_date)] = url
+        key      = (away_id, home_id, game_date)
+        priority = _watchufa_url_priority(url)
+        if priority < lookup_priority.get(key, 99):
+            lookup[key]          = url
+            lookup_priority[key] = priority
 
     print(f"Parsed {len(lookup)} unique {YEAR_FILTER} games from sitemap.")
     return lookup
@@ -306,25 +321,24 @@ def main():
     sitemap_xml   = fetch_sitemap()
     sitemap       = parse_sitemap(sitemap_xml)
 
-    needs_watchufa = [g for g in games if not existing.get(g["GameID"], {}).get("WatchUFA_full")]
     needs_youtube  = [g for g in games if not existing.get(g["GameID"], {}).get("YT_highlights")]
 
-    print(f"\n{len(needs_watchufa)} games need WatchUFA link.")
+    print(f"\n{len(games)} games will be checked for WatchUFA links (always re-checked).")
     print(f"{len(needs_youtube)} games need YouTube link.\n")
 
     # Merge both needs into one pass per game
     all_game_ids = {g["GameID"]: g for g in games}
-    to_process   = {g["GameID"] for g in needs_watchufa} | {g["GameID"] for g in needs_youtube}
+    to_process   = {g["GameID"] for g in games} | {g["GameID"] for g in needs_youtube}
 
-    yt_found      = 0
+    yt_found       = 0
     watchufa_found = 0
-    quota_hit     = False
+    quota_hit      = False
 
     for i, game_id in enumerate(sorted(to_process), 1):
-        game        = all_game_ids[game_id]
+        game         = all_game_ids[game_id]
         existing_row = existing.get(game_id, {})
 
-        want_watchufa = not existing_row.get("WatchUFA_full")
+        want_watchufa = True
         want_youtube  = not existing_row.get("YT_highlights") and not quota_hit
 
         print(f"[{i}/{len(to_process)}] {game_id}")

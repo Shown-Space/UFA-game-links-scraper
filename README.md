@@ -15,23 +15,16 @@ SUPABASE_URL=...
 SUPABASE_KEY=...
 ```
 
-## Scripts
+## Usage
 
-### `ufa_weekly_sync.py` — run this weekly
-Finds missing WatchUFA and YouTube links for any newly played games and upserts them directly into the database. Only adds YouTube links with HIGH confidence.
+Run once a week, ideally on Monday or Tuesday after the weekend's games have been played. WatchUFA typically uploads streams within a day or two of each game, and the UFA YouTube channel posts highlights around the same time.
 
 ```bash
 python ufa_weekly_sync.py
 ```
 
-### `ufa_youtube_linker.py` — one-time / manual use
-Searches YouTube for highlight videos across all games in a season. Outputs a spreadsheet and SQL file for review before importing.
-
-### `ufa_watchufa_linker.py` — one-time / manual use
-Parses the WatchUFA sitemap to find stream URLs for all games in a season. Outputs a spreadsheet and SQL file for review.
-
-### `generate_game_links_sql.py` — one-time / manual use
-Merges both spreadsheets into a single SQL file to create and populate the `game_links` table.
+- **WatchUFA links** — re-checked and updated every run. Prefers `week-N` collection URLs over team collection URLs, and remaster versions over originals.
+- **YouTube links** — only searched for games that don't already have one (HIGH confidence only). YouTube API has a daily quota of ~100 searches, so re-run the next day if quota is hit.
 
 ## game_links table
 
