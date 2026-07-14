@@ -5,6 +5,10 @@ UFA Weekly Sync
 Run once a week to find WatchUFA and YouTube highlight links for any
 newly played games, and upsert them directly into the game_links table.
 
+WatchUFA links come from the official UFA API (streamingURL per game),
+keyed by the same gameID we store. YouTube highlight links are found by
+searching the UFA YouTube channel (no API exists for these).
+
 SETUP:
   pip install google-api-python-client python-dotenv
 
@@ -18,13 +22,11 @@ USAGE:
 """
 
 import os
-import re
 import json
 import time
 import urllib.request
 import urllib.parse
-from datetime import datetime, timedelta, date, timezone
-from xml.etree import ElementTree
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
@@ -36,40 +38,12 @@ YOUTUBE_API_KEY = os.environ["YOUTUBE_API_KEY"]
 SUPABASE_URL    = os.environ["SUPABASE_URL"]
 SUPABASE_KEY    = os.environ["SUPABASE_KEY"]
 
-YEAR_FILTER        = 2026
-SITEMAP_URL        = "https://www.watchufa.tv/sitemap.xml"
-UFA_CHANNEL_ID     = "UCzInURHrtSH7208Mf1HVqUA"
-SEARCH_DELAY       = 1.0  # seconds between YouTube API calls
+YEAR_FILTER    = 2026
+UFA_API_BASE   = "https://www.backend.ufastats.com/api/v1"
+UFA_CHANNEL_ID = "UCzInURHrtSH7208Mf1HVqUA"
+SEARCH_DELAY   = 1.0  # seconds between YouTube API calls
 
 # ─── TEAM DATA ────────────────────────────────────────────────────────────────
-
-# Maps watchufa.tv city slugs → database TeamID
-CITY_SLUG_TO_TEAM = {
-    "atlanta":      "hustle",
-    "austin":       "sol",
-    "boston":       "glory",
-    "carolina":     "flyers",
-    "chicago":      "union",
-    "colorado":     "apex",
-    "dc":           "breeze",
-    "detroit":      "mechanix",
-    "houston":      "havoc",
-    "indianapolis": "alleycats",
-    "las-vegas":    "bighorns",
-    "los-angeles":  "aviators",
-    "madison":      "radicals",
-    "minnesota":    "windchill",
-    "montreal":     "royal",
-    "new-york":     "empire",
-    "oakland":      "spiders",
-    "oregon":       "steel",
-    "philadelphia": "phoenix",
-    "pittsburgh":   "thunderbirds",
-    "salt-lake":    "shred",
-    "san-diego":    "growlers",
-    "seattle":      "cascades",
-    "toronto":      "rush",
-}
 
 # Maps database TeamID → names used in YouTube search + title matching
 TEAM_NAMES = {
@@ -150,7 +124,7 @@ def load_existing_links():
 
 
 def upsert_game_link(game_id, yt_url=None, watchufa_url=None):
-    """Upsert a single row into game_links."""
+    """Upsert a single row into game_links (partial — only sets provided columns)."""
     body = {"GameID": game_id}
     if yt_url is not None:
         body["YT_highlights"] = yt_url
@@ -162,79 +136,29 @@ def upsert_game_link(game_id, yt_url=None, watchufa_url=None):
     })
 
 
-# ─── WATCHUFA SITEMAP ─────────────────────────────────────────────────────────
+# ─── UFA API (WatchUFA streaming links) ───────────────────────────────────────
 
-_DATE_SUFFIX        = r"(?:-.+)?$"   # tolerates -remaster, timestamps, or nothing
-_TEAMS              = r"^(?P<away>[a-z][a-z-]*)-at-(?P<home>[a-z][a-z-]*)"
-_GAME_SLUG_RE       = re.compile(_TEAMS + r"-(?P<month>\d{1,2})-(?P<day>\d{1,2})-(?P<year>\d{4})" + _DATE_SUFFIX)
-_GAME_SLUG_RE_ALT   = re.compile(_TEAMS + r"-(?P<month>\d{1,2})-\d{1,2}-(?P<day>\d{1,2})-(?P<year>\d{4})" + _DATE_SUFFIX)
+def fetch_streaming_urls(year):
+    """Fetch {gameID: streamingURL} for every game in `year` from the UFA API.
 
-
-def fetch_sitemap():
-    print(f"Downloading sitemap from {SITEMAP_URL} ...")
-    req = urllib.request.Request(SITEMAP_URL, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read()
-
-
-def _watchufa_url_priority(url):
-    is_week     = bool(re.search(r"/week-\d+/", url))
-    is_remaster = "remaster" in url
-    if is_week and is_remaster: return 0
-    if is_week:                 return 1
-    if is_remaster:             return 2
-    return 3
-
-
-def parse_sitemap(xml_bytes):
-    """Returns {(away_id, home_id, game_date): url} for all YEAR_FILTER games."""
-    root = ElementTree.fromstring(xml_bytes)
-    seen_urls = set()
-    lookup          = {}
-    lookup_priority = {}
-
-    for loc_el in root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc"):
-        url = loc_el.text.strip()
-        if url in seen_urls:
-            continue
-        seen_urls.add(url)
-
-        m = re.search(r"/videos/(.+)$", url)
-        if not m:
-            continue
-        slug = m.group(1)
-
-        match = _GAME_SLUG_RE.match(slug) or _GAME_SLUG_RE_ALT.match(slug)
-        if not match:
-            continue
-        if int(match.group("year")) != YEAR_FILTER:
-            continue
-
-        away_id = CITY_SLUG_TO_TEAM.get(match.group("away"))
-        home_id = CITY_SLUG_TO_TEAM.get(match.group("home"))
-        if not away_id or not home_id:
-            continue
-
-        game_date = date(int(match.group("year")), int(match.group("month")), int(match.group("day")))
-        key      = (away_id, home_id, game_date)
-        priority = _watchufa_url_priority(url)
-        if priority < lookup_priority.get(key, 99):
-            lookup[key]          = url
-            lookup_priority[key] = priority
-
-    print(f"Parsed {len(lookup)} unique {YEAR_FILTER} games from sitemap.")
-    return lookup
-
-
-def find_watchufa_url(game, sitemap_lookup):
-    ts        = datetime.fromisoformat(game["StartTimestamp"])
-    utc_date  = ts.date()
-    prev_date = utc_date - timedelta(days=1)
-    away, home = game["AwayTeamID"], game["HomeTeamID"]
-    return (
-        sitemap_lookup.get((away, home, utc_date)) or
-        sitemap_lookup.get((away, home, prev_date))
+    Replaces the old watchufa.tv sitemap scraping — the API keys streamingURL
+    by the exact gameID we already store, so no slug/date matching is needed.
+    """
+    params = urllib.parse.urlencode({"date": str(year)})
+    req = urllib.request.Request(
+        f"{UFA_API_BASE}/games?{params}",
+        headers={"User-Agent": "Mozilla/5.0"},
     )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        payload = json.loads(r.read())
+
+    lookup = {
+        g["gameID"]: g["streamingURL"]
+        for g in payload.get("data", [])
+        if g.get("streamingURL")
+    }
+    print(f"Fetched {len(lookup)} streaming URLs from UFA API.")
+    return lookup
 
 
 # ─── YOUTUBE ──────────────────────────────────────────────────────────────────
@@ -316,12 +240,11 @@ def main():
 
     youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
-    games         = load_played_games()
-    existing      = load_existing_links()
-    sitemap_xml   = fetch_sitemap()
-    sitemap       = parse_sitemap(sitemap_xml)
+    games     = load_played_games()
+    existing  = load_existing_links()
+    streaming = fetch_streaming_urls(YEAR_FILTER)
 
-    needs_youtube  = [g for g in games if not existing.get(g["GameID"], {}).get("YT_highlights")]
+    needs_youtube = [g for g in games if not existing.get(g["GameID"], {}).get("YT_highlights")]
 
     print(f"\n{len(games)} games will be checked for WatchUFA links (always re-checked).")
     print(f"{len(needs_youtube)} games need YouTube link.\n")
@@ -347,12 +270,12 @@ def main():
         yt_url       = None
 
         if want_watchufa:
-            watchufa_url = find_watchufa_url(game, sitemap)
+            watchufa_url = streaming.get(game_id)
             if watchufa_url:
                 print(f"  WatchUFA: {watchufa_url}")
                 watchufa_found += 1
             else:
-                print(f"  WatchUFA: not found in sitemap")
+                print(f"  WatchUFA: not found in UFA API")
 
         if want_youtube:
             try:
