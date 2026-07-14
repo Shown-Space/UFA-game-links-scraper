@@ -91,19 +91,17 @@ def _supabase_request(method, path, body=None, extra_headers=None):
         return json.loads(body) if body else {}
 
 
-def load_played_games():
-    """Load all games for YEAR_FILTER that have already been played."""
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    params = urllib.parse.urlencode({
-        "Year":           f"eq.{YEAR_FILTER}",
-        "StartTimestamp": f"lt.{now_iso}",
-        "select":         "GameID,HomeTeamID,AwayTeamID,StartTimestamp",
-        "order":          "StartTimestamp.asc",
-    })
-    path = f"/rest/v1/games?{params}"
-    games = _supabase_request("GET", path)
-    print(f"Loaded {len(games)} played games from database.")
-    return games
+def load_games():
+      """Load all games for YEAR_FILTER (played AND upcoming)."""
+      params = urllib.parse.urlencode({
+          "Year":   f"eq.{YEAR_FILTER}",
+          "select": "GameID,HomeTeamID,AwayTeamID,StartTimestamp",
+          "order":  "StartTimestamp.asc",
+      })
+      path = f"/rest/v1/games?{params}"
+      games = _supabase_request("GET", path)
+      print(f"Loaded {len(games)} games from database (played + upcoming).")
+      return games
 
 
 def load_existing_links():
@@ -240,42 +238,43 @@ def main():
 
     youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
-    games     = load_played_games()
+    now       = datetime.now(timezone.utc)
+    games     = load_games()
     existing  = load_existing_links()
     streaming = fetch_streaming_urls(YEAR_FILTER)
 
-    needs_youtube = [g for g in games if not existing.get(g["GameID"], {}).get("YT_highlights")]
-
-    print(f"\n{len(games)} games will be checked for WatchUFA links (always re-checked).")
-    print(f"{len(needs_youtube)} games need YouTube link.\n")
-
-    # Merge both needs into one pass per game
     all_game_ids = {g["GameID"]: g for g in games}
-    to_process   = {g["GameID"] for g in games} | {g["GameID"] for g in needs_youtube}
+
+    print(f"\n{len(all_game_ids)} games will be checked for WatchUFA links (played + upcoming).\n")
 
     yt_found       = 0
     watchufa_found = 0
     quota_hit      = False
 
-    for i, game_id in enumerate(sorted(to_process), 1):
+    for i, game_id in enumerate(sorted(all_game_ids), 1):
         game         = all_game_ids[game_id]
         existing_row = existing.get(game_id, {})
 
-        want_watchufa = True
-        want_youtube  = not existing_row.get("YT_highlights") and not quota_hit
+        # A game is "played" if its start time is in the past.
+        ts = datetime.fromisoformat(game["StartTimestamp"])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        is_played = ts < now
 
-        print(f"[{i}/{len(to_process)}] {game_id}")
+        # WatchUFA: any game the API has a URL for (incl. upcoming previews).
+        # YouTube:  only played games still missing a highlight link.
+        want_youtube = is_played and not existing_row.get("YT_highlights") and not quota_hit
 
-        watchufa_url = None
+        print(f"[{i}/{len(all_game_ids)}] {game_id}{'' if is_played else '  (upcoming)'}")
+
+        watchufa_url = streaming.get(game_id)
         yt_url       = None
 
-        if want_watchufa:
-            watchufa_url = streaming.get(game_id)
-            if watchufa_url:
-                print(f"  WatchUFA: {watchufa_url}")
-                watchufa_found += 1
-            else:
-                print(f"  WatchUFA: not found in UFA API")
+        if watchufa_url:
+            print(f"  WatchUFA: {watchufa_url}")
+            watchufa_found += 1
+        else:
+            print(f"  WatchUFA: not found in UFA API")
 
         if want_youtube:
             try:
@@ -293,7 +292,6 @@ def main():
                 else:
                     raise
 
-        # Only upsert if we found something new
         if watchufa_url or yt_url:
             upsert_game_link(game_id, yt_url=yt_url, watchufa_url=watchufa_url)
 
