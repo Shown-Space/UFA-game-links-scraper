@@ -195,8 +195,11 @@ def _score(title, game):
         "playoffs", "championship", "semifinal", "division",
     ])
 
-    if not is_highlights:              return "LOW"
+    # An exact matchup + date on the official channel is definitive, even when the
+    # title has no "highlights" keyword — playoff VODs are titled e.g.
+    # "LIVE Playoffs | DC Breeze vs New York Empire | July 25, 2026".
     if home_match and away_match and date_match: return "HIGH"
+    if not is_highlights:              return "LOW"
     if home_match and away_match:      return "MEDIUM"
     return "LOW"
 
