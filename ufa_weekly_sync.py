@@ -99,7 +99,10 @@ def load_games():
           "order":  "StartTimestamp.asc",
       })
       path = f"/rest/v1/games?{params}"
-      games = _supabase_request("GET", path)
+      # games lives in the `prod` schema (same as the website). Without this
+      # header PostgREST reads the stale default/public.games and misses the
+      # most recent games, so their WatchUFA links never get written.
+      games = _supabase_request("GET", path, extra_headers={"Accept-Profile": "prod"})
       print(f"Loaded {len(games)} games from database (played + upcoming).")
       return games
 
