@@ -26,7 +26,7 @@ import json
 import time
 import urllib.request
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 
@@ -179,17 +179,28 @@ def _build_query(game):
     home = _primary_name(game["HomeTeamID"])
     return f"{away} at {home} highlights {_format_date(ts)} UFA"
 
+def _date_variants(ts):
+    """Lowercased date strings a title might use, over a ±1 day window so
+    late-night / timezone-shifted uploads still match."""
+    out = set()
+    for delta in (-1, 0, 1):
+        d = ts + timedelta(days=delta)
+        out.add(d.strftime("%B %d, %Y"))                     # July 05, 2026
+        out.add(d.strftime("%B %d, %Y").replace(" 0", " "))  # July 5, 2026
+        out.add(d.strftime("%b %d, %Y"))                     # Jul 05, 2026
+        out.add(d.strftime("%b %d, %Y").replace(" 0", " "))  # Jul 5, 2026
+        out.add(f"{d.month}/{d.day}/{d.year}")               # 7/5/2026
+        out.add(f"{d.month}/{d.day}/{str(d.year)[2:]}")      # 7/5/26
+    return {s.lower() for s in out}
+
+
 def _score(title, game):
     t  = title.lower()
     ts = datetime.fromisoformat(game["StartTimestamp"])
 
     home_match = any(n.lower() in t for n in _all_names(game["HomeTeamID"]))
     away_match = any(n.lower() in t for n in _all_names(game["AwayTeamID"]))
-    date_match = any(d.lower() in t for d in [
-        _format_date(ts), ts.strftime("%B %d, %Y"),
-        ts.strftime("%b %d, %Y").replace(" 0", " "),
-        _format_date(ts).upper(),
-    ])
+    date_match = any(d in t for d in _date_variants(ts))
     is_highlights = any(w in t for w in [
         "highlight", "full game", "full match",
         "playoffs", "championship", "semifinal", "division",
