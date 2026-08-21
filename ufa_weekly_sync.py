@@ -45,32 +45,35 @@ SEARCH_DELAY   = 1.0  # seconds between YouTube API calls
 
 # ─── TEAM DATA ────────────────────────────────────────────────────────────────
 
-# Maps database TeamID → names used in YouTube search + title matching
+# Maps database TeamID → names used in YouTube search + title matching.
+# Each list also carries the bare city name, because playoff/championship
+# uploads shorten the matchup to cities ("Salt Lake at Oakland"). Safe because
+# HIGH confidence still requires BOTH teams *and* the date to match.
 TEAM_NAMES = {
-    "hustle":       ["Atlanta Hustle", "Hustle"],
-    "sol":          ["Austin Sol", "Sol"],
-    "glory":        ["Boston Glory", "Glory"],
-    "flyers":       ["Carolina Flyers", "Flyers"],
-    "union":        ["Chicago Union", "Union"],
-    "apex":         ["Colorado Apex", "Apex", "Colorado Summit", "Summit"],
-    "breeze":       ["DC Breeze", "Breeze"],
-    "mechanix":     ["Detroit Mechanix", "Mechanix"],
-    "havoc":        ["Houston Havoc", "Havoc"],
-    "alleycats":    ["Indianapolis AlleyCats", "AlleyCats", "Indy AlleyCats"],
-    "bighorns":     ["Vegas Bighorns", "Bighorns", "Las Vegas Bighorns"],
-    "aviators":     ["Los Angeles Aviators", "Aviators"],
-    "radicals":     ["Madison Radicals", "Radicals"],
-    "windchill":    ["Minnesota Wind Chill", "Wind Chill", "Windchill"],
-    "royal":        ["Montreal Royal", "Royal"],
-    "empire":       ["New York Empire", "Empire"],
-    "spiders":      ["Oakland Spiders", "Spiders"],
-    "steel":        ["Oregon Steel", "Steel"],
-    "phoenix":      ["Philadelphia Phoenix", "Phoenix"],
-    "thunderbirds": ["Pittsburgh Thunderbirds", "Thunderbirds"],
-    "shred":        ["Salt Lake Shred", "Shred"],
-    "growlers":     ["San Diego Growlers", "Growlers"],
-    "cascades":     ["Seattle Cascades", "Cascades"],
-    "rush":         ["Toronto Rush", "Rush"],
+    "hustle":       ["Atlanta Hustle", "Hustle", "Atlanta"],
+    "sol":          ["Austin Sol", "Sol", "Austin"],
+    "glory":        ["Boston Glory", "Glory", "Boston"],
+    "flyers":       ["Carolina Flyers", "Flyers", "Carolina"],
+    "union":        ["Chicago Union", "Union", "Chicago"],
+    "apex":         ["Colorado Apex", "Apex", "Colorado Summit", "Summit", "Colorado"],
+    "breeze":       ["DC Breeze", "Breeze", "Washington DC", "Washington"],
+    "mechanix":     ["Detroit Mechanix", "Mechanix", "Detroit"],
+    "havoc":        ["Houston Havoc", "Havoc", "Houston"],
+    "alleycats":    ["Indianapolis AlleyCats", "AlleyCats", "Indy AlleyCats", "Indianapolis", "Indy"],
+    "bighorns":     ["Vegas Bighorns", "Bighorns", "Las Vegas Bighorns", "Las Vegas", "Vegas"],
+    "aviators":     ["Los Angeles Aviators", "Aviators", "Los Angeles"],
+    "radicals":     ["Madison Radicals", "Radicals", "Madison"],
+    "windchill":    ["Minnesota Wind Chill", "Wind Chill", "Windchill", "Minnesota"],
+    "royal":        ["Montreal Royal", "Royal", "Montreal", "Montréal"],
+    "empire":       ["New York Empire", "Empire", "New York"],
+    "spiders":      ["Oakland Spiders", "Spiders", "Oakland"],
+    "steel":        ["Oregon Steel", "Steel", "Oregon", "Portland"],
+    "phoenix":      ["Philadelphia Phoenix", "Phoenix", "Philadelphia", "Philly"],
+    "thunderbirds": ["Pittsburgh Thunderbirds", "Thunderbirds", "Pittsburgh"],
+    "shred":        ["Salt Lake Shred", "Shred", "Salt Lake City", "Salt Lake"],
+    "growlers":     ["San Diego Growlers", "Growlers", "San Diego"],
+    "cascades":     ["Seattle Cascades", "Cascades", "Seattle"],
+    "rush":         ["Toronto Rush", "Rush", "Toronto"],
 }
 
 # ─── SUPABASE HELPERS ─────────────────────────────────────────────────────────
